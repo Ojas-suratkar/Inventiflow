@@ -1,0 +1,150 @@
+Folder PATH listing for volume OJAS-STUDY
+Volume serial number is E8CA-446F
+D:.
+|   folder_structure.txt
+|   
++---backend
+|   |   .env
+|   |   main.py
+|   |   README.md
+|   |   requirements.txt
+|   |   
+|   \---app
+|       +---api
+|       |       auth.py
+|       |       distributor.py
+|       |       notifications.py
+|       |       production.py
+|       |       vendor.py
+|       |       warehouse.py
+|       |       
+|       +---core
+|       |       config.py
+|       |       security.py
+|       |       
+|       +---database
+|       |       connection.py
+|       |       crud.py
+|       |       models.py
+|       |       
+|       \---services
+|               distributor_service.py
+|               production_service.py
+|               vendor_service.py
+|               warehouse_service.py
+|               
+\---frontend
+    |   .env.local
+    |   next.config.js
+    |   README.md
+    |   tailwind.config.js
+    |   
+    +---.next
+    |   |   build-manifest.json
+    |   |   package.json
+    |   |   react-loadable-manifest.json
+    |   |   trace
+    |   |   
+    |   +---cache
+    |   |   |   .rscinfo
+    |   |   |   
+    |   |   \---webpack
+    |   |       \---client-development
+    |   |               0.pack.gz
+    |   |               index.pack.gz
+    |   |               
+    |   +---server
+    |   |       interception-route-rewrite-manifest.js
+    |   |       middleware-build-manifest.js
+    |   |       middleware-manifest.json
+    |   |       middleware-react-loadable-manifest.js
+    |   |       next-font-manifest.js
+    |   |       next-font-manifest.json
+    |   |       pages-manifest.json
+    |   |       
+    |   \---static
+    |       +---chunks
+    |       |       polyfills.js
+    |       |       
+    |       \---development
+    |               _buildManifest.js
+    |               _ssgManifest.js
+    |               
+    +---components
+    |   +---distributor-dashboard
+    |   |       ActionCard.jsx
+    |   |       distributor-dashboardTable.jsx
+    |   |       
+    |   +---production-dashboard
+    |   |       ActionCard.jsx
+    |   |       production-dashboardTable.jsx
+    |   |       
+    |   +---shared
+    |   |       Header.jsx
+    |   |       Loader.jsx
+    |   |       NotificationBell.jsx
+    |   |       Sidebar.jsx
+    |   |       Table.jsx
+    |   |       
+    |   +---vendor-dashboard
+    |   |       ActionCard.jsx
+    |   |       vendor-dashboardTable.jsx
+    |   |       
+    |   \---warehouse-dashboard
+    |           ActionCard.jsx
+    |           warehouse-dashboardTable.jsx
+    |           
+    +---pages
+    |   +---api
+    |   |   |   notifications.js
+    |   |   |   
+    |   |   +---distributor-dashboard
+    |   |   |       order-status.js
+    |   |   |       products.js
+    |   |   |       
+    |   |   +---production-dashboard
+    |   |   |       order-status.js
+    |   |   |       products.js
+    |   |   |       
+    |   |   +---vendor-dashboard
+    |   |   |       order-status.js
+    |   |   |       products.js
+    |   |   |       
+    |   |   \---warehouse-dashboard
+    |   |           order-status.js
+    |   |           products.js
+    |   |           
+    |   +---distributor-dashboard
+    |   |       history.js
+    |   |       index.js
+    |   |       new-order.js
+    |   |       
+    |   +---production-dashboard
+    |   |       history.js
+    |   |       index.js
+    |   |       new-order.js
+    |   |       
+    |   +---vendor-dashboard
+    |   |       history.js
+    |   |       index.js
+    |   |       new-order.js
+    |   |       
+    |   \---warehouse-dashboard
+    |           history.js
+    |           index.js
+    |           new-order.js
+    |           
+    +---public
+    |       favicon.ico
+    |       logo.png
+    |       
+    +---styles
+    |       cards.css
+    |       globals.css
+    |       sidebar.css
+    |       table.css
+    |       
+    \---utils
+            apiHelpers.js
+            supabaseClient.js
+            
