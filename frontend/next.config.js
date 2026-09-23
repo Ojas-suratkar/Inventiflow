@@ -1,14 +1,10 @@
-module.exports = {
-    env: {
-      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    },
-  };
-  
-
 const path = require("path");
 
+/** @type {import('next').NextConfig} */
 module.exports = {
+  reactStrictMode: true,
+  // The dev overlay badge sits on top of the sidebar user menu.
+  devIndicators: false,
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -17,4 +13,3 @@ module.exports = {
     return config;
   },
 };
-  

@@ -1,286 +1,167 @@
-// Full Component Code
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { Check, X, Inbox } from "lucide-react";
 import { supabase } from "@/utils/supabaseClient";
+import { useProfile } from "@/lib/useProfile";
+import { useToast } from "@/components/ui/toast";
+import { AppShell } from "@/components/app/shell";
+import { Card, CardHeader } from "@/components/ui/card";
+import { Table } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { currency, number, shortDate } from "@/lib/format";
 
-export default function ReceivedOrders() {
-  const [orders, setOrders] = useState([]); // To store fetched orders
-  const [statusFilter, setStatusFilter] = useState("All"); // Filter: All, Accepted, Rejected, Pending
-  const [profile, setProfile] = useState(null); // Warehouse Manager's Profile
-  const [loading, setLoading] = useState(false); // Loading state
+const FILTERS = [
+  { value: "Pending", label: "Waiting on you" },
+  { value: "Accepted", label: "Accepted" },
+  { value: "Rejected", label: "Rejected" },
+  { value: "All", label: "Every order" },
+];
 
-  // Fetch the manager's profile on component mount
+export default function IncomingOrders() {
+  const { profile, loading } = useProfile("Warehouse Manager");
+  const toast = useToast();
+  const [orders, setOrders] = useState([]);
+  const [busy, setBusy] = useState(true);
+  const [filter, setFilter] = useState("Pending");
+  const [working, setWorking] = useState(null);
+
+  const load = async () => {
+    if (!profile?.warehouse_id) return;
+    setBusy(true);
+
+    const { data: distributors } = await supabase
+      .from("profiles")
+      .select("id, name, company_name")
+      .eq("warehouse_id", profile.warehouse_id);
+
+    const ids = (distributors || []).map((d) => d.id);
+    if (!ids.length) {
+      setOrders([]);
+      setBusy(false);
+      return;
+    }
+
+    let query = supabase
+      .from("orders")
+      .select("id, product_id, packaging, quantity, price, status, deadline, created_at, distributor_id, products(name), packaging(type)")
+      .in("distributor_id", ids)
+      .order("created_at", { ascending: false });
+
+    if (filter !== "All") query = query.eq("status", filter);
+
+    const { data } = await query;
+    const byId = Object.fromEntries((distributors || []).map((d) => [d.id, d]));
+    setOrders((data || []).map((o) => ({ ...o, distributor: byId[o.distributor_id] })));
+    setBusy(false);
+  };
+
   useEffect(() => {
-    fetchProfile();
-  }, []);
+    load();
+  }, [profile, filter]);
 
-  // Fetch orders whenever profile or status filter changes
-  useEffect(() => {
-    if (profile) {
-      fetchOrders();
+  /* Accepting an order takes the stock out of this warehouse. */
+  const accept = async (order) => {
+    setWorking(order.id);
+    const { data: stock } = await supabase
+      .from("warehouse_inventory")
+      .select("id, quantity, price")
+      .eq("warehouse_id", profile.warehouse_id)
+      .eq("product_id", order.product_id)
+      .maybeSingle();
+
+    if (!stock) {
+      toast(`No ${order.products?.name} stocked at this site.`, "error");
+      setWorking(null);
+      return;
     }
-  }, [statusFilter, profile]);
-
-  const fetchProfile = async () => {
-    setLoading(true);
-    try {
-      const { data: user, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-
-      console.log("Logged-in User ID:", user?.user?.id);
-
-      const { data: managerData, error: managerError } = await supabase
-        .from("warehouse_managers")
-        .select("manager_id, warehouse_id")
-        .eq("manager_id", user?.user?.id)
-        .single();
-
-      if (managerError || !managerData) {
-        throw new Error("No warehouse assigned to this manager. Check the `warehouse_managers` table.");
-      }
-
-      console.log("Warehouse Manager Data Fetched:", managerData);
-      setProfile(managerData);
-    } catch (err) {
-      console.error("Error fetching profile:", err.message);
-    } finally {
-      setLoading(false);
+    if (Number(stock.quantity) < Number(order.quantity)) {
+      toast(`Only ${number(stock.quantity)} units of ${order.products?.name} on hand, order needs ${number(order.quantity)}.`, "error");
+      setWorking(null);
+      return;
     }
+
+    const remaining = Number(stock.quantity) - Number(order.quantity);
+    await supabase
+      .from("warehouse_inventory")
+      .update({ quantity: remaining, total_price: Number((remaining * Number(stock.price || 0)).toFixed(2)) })
+      .eq("id", stock.id);
+
+    const { error } = await supabase.from("orders").update({ status: "Accepted" }).eq("id", order.id);
+    setWorking(null);
+
+    if (error) {
+      toast(error.message, "error");
+      return;
+    }
+    toast(`Order #${order.id} accepted. ${number(order.quantity)} units released.`);
+    load();
   };
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      if (!profile?.warehouse_id) {
-        console.error("No warehouse assigned to this manager.");
-        return;
-      }
-
-      console.log("Fetching orders for warehouse_id:", profile.warehouse_id);
-
-      const { data: distributors, error: distributorError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("warehouse_id", profile.warehouse_id);
-
-      if (distributorError) throw distributorError;
-
-      const distributorIds = distributors.map((d) => d.id);
-      console.log("Distributor IDs for warehouse:", distributorIds);
-
-      if (distributorIds.length === 0) {
-        console.log("No distributors linked to this warehouse.");
-        setOrders([]);
-        return;
-      }
-
-      let query = supabase.from("orders").select("id, product_id, packaging, quantity, status, distributor_id, price, deadline").in("distributor_id", distributorIds);
-      if (statusFilter !== "All") {
-        query = query.eq("status", statusFilter);
-      }
-
-      const { data: orders, error: ordersError } = await query;
-
-      if (ordersError) throw ordersError;
-
-      console.log("Orders Query Result:", orders);
-      setOrders(orders || []);
-    } catch (err) {
-      console.error("Error fetching orders:", err.message);
-    } finally {
-      setLoading(false);
-    }
+  const reject = async (order) => {
+    setWorking(order.id);
+    await supabase.from("orders").update({ status: "Rejected" }).eq("id", order.id);
+    setWorking(null);
+    toast(`Order #${order.id} rejected.`, "info");
+    load();
   };
 
-  const handleAccept = async (order) => {
-    try {
-      console.log("Attempting to accept order:", order);
-  
-      // Check if packaging_id is defined
-      if (!order.packaging) {
-        console.error("Missing packaging_id for the order.");
-        alert("The order is missing packaging information. Unable to process.");
-        return;
-      }
-  
-      // Fetch inventory for the specific warehouse, product, and packaging type
-      const { data: inventoryRow, error: inventoryError } = await supabase
-        .from("warehouse_inventory")
-        .select("*")
-        .eq("warehouse_id", profile.warehouse_id)
-        .eq("product_id", order.product_id)
-        .eq("packaging_id", order.packaging)
-        .single(); // Expecting a single row
-  
-      if (inventoryError) {
-        console.error("Error fetching inventory:", inventoryError.message);
-        throw inventoryError;
-      }
-  
-      console.log("Fetched inventory row:", inventoryRow);
-  
-      if (!inventoryRow) {
-        alert("No inventory found for this product and packaging type in the warehouse.");
-        return;
-      }
-  
-      // Check if inventory is sufficient
-      if (inventoryRow.quantity < order.quantity) {
-        alert("Insufficient inventory for the specified packaging type. Unable to accept this order.");
-        return;
-      }
-  
-      console.log("Sufficient inventory available. Proceeding to deduct stock...");
-  
-      // Deduct inventory for the specific packaging type
-      const { error: updateInventoryError } = await supabase
-        .from("warehouse_inventory")
-        .update({
-          quantity: inventoryRow.quantity - order.quantity,
-        })
-        .eq("id", inventoryRow.id); // Match the specific inventory row by ID
-  
-      if (updateInventoryError) {
-        console.error("Error updating inventory:", updateInventoryError.message);
-        throw updateInventoryError;
-      }
-  
-      console.log("Inventory updated successfully. Updating order status...");
-  
-      // Update the order status to "Accepted"
-      const { error: updateOrderError } = await supabase
-        .from("orders")
-        .update({ status: "Accepted" })
-        .eq("id", order.id);
-  
-      if (updateOrderError) {
-        console.error("Error updating order status:", updateOrderError.message);
-        throw updateOrderError;
-      }
-  
-      console.log("Order status updated successfully. Refreshing orders...");
-  
-      // Refresh the orders list
-      fetchOrders();
-  
-      alert("Order accepted successfully!");
-    } catch (err) {
-      console.error("Error accepting order:", err.message);
-      alert("An error occurred while accepting the order.");
-    }
-  };
-  
-    
-
-  const handleReject = async (orderId) => {
-    try {
-      await supabase.from("orders").update({ status: "Rejected" }).eq("id", orderId);
-      fetchOrders();
-      alert("Order rejected successfully!");
-    } catch (err) {
-      console.error("Error rejecting order:", err.message);
-      alert("An error occurred while rejecting the order.");
-    }
-  };
+  if (loading) return null;
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
-      {/* Sidebar */}
-      <div className="w-1/5 bg-gray-800 p-4 flex flex-col items-center relative">
-        <div className="rounded-full bg-gray-700 w-20 h-20 mb-4"></div>
-        <h3 className="text-lg font-semibold mb-2">{profile?.name || "Warehouse Manager"}</h3>
-        <Button onClick={fetchOrders} className="bg-indigo-600 w-full mb-4">
-          Refresh
-        </Button>
-        <div className="absolute bottom-6 left-6">
-          <button
-            onClick={() => alert("Chatbot Opened!")}
-            className="w-12 h-12 bg-indigo-600 hover:bg-indigo-700 rounded-full flex items-center justify-center shadow-lg"
-          >
-            💬
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 p-6">
-        <h1 className="text-2xl font-bold mb-6">Received Orders</h1>
-
-        {/* Filters */}
-        <div className="flex items-center gap-4 mb-4">
-          <Select onValueChange={setStatusFilter} value={statusFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filter by Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="All">All</SelectItem>
-              <SelectItem value="Pending">Pending</SelectItem>
-              <SelectItem value="Accepted">Accepted</SelectItem>
-              <SelectItem value="Rejected">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input placeholder="Search by Order ID" className="w-64" />
-        </div>
-
-        {/* Orders Table */}
-        <div className="overflow-auto max-h-[70vh] max-w-full border border-gray-700">
-          <table className="min-w-full text-left border-collapse">
-            <thead className="bg-gray-800">
-              <tr>
-                <th className="border p-2">Sr. No</th>
-                <th className="border p-2">Order ID</th>
-                <th className="border p-2">Product Name</th>
-                <th className="border p-2">Qty</th>
-                <th className="border p-2">Price/Unit</th>
-                <th className="border p-2">Total Price</th>
-                <th className="border p-2">Date</th>
-                <th className="border p-2">Status</th>
-                <th className="border p-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 ? (
-                <tr>
-                  <td colSpan="9" className="text-center p-4">
-                    No orders found.
-                  </td>
-                </tr>
-              ) : (
-                orders.map((order, index) => (
-                  <tr key={order.id} className="border bg-gray-800">
-                    <td className="border p-2">{index + 1}</td>
-                    <td className="border p-2">{order.id}</td>
-                    <td className="border p-2">{order.product_name}</td>
-                    <td className="border p-2">{order.quantity}</td>
-                    <td className="border p-2">${order.price_per_unit}</td>
-                    <td className="border p-2">${order.quantity * order.price_per_unit}</td>
-                    <td className="border p-2">{new Date(order.deadline).toLocaleDateString()}</td>
-                    <td className="border p-2">{order.status}</td>
-                    <td className="border p-2 flex gap-2">
-                      <Button
-                        className="bg-green-500 hover:bg-green-600"
-                        onClick={() => handleAccept(order)}
-                        disabled={order.status !== "Pending"}
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        className="bg-red-500 hover:bg-red-600"
-                        onClick={() => handleReject(order.id)}
-                        disabled={order.status !== "Pending"}
-                      >
-                        Reject
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <AppShell
+      role="Warehouse Manager"
+      profile={profile}
+      title="Incoming orders"
+      description="Accepting an order releases stock from this warehouse"
+      actions={<Select className="w-44" value={filter} onChange={setFilter} options={FILTERS} />}
+    >
+      <Card>
+        <CardHeader title="Distributor orders" description={`${number(orders.length)} shown`} />
+        <Table
+          loading={busy}
+          empty={filter === "Pending" ? "Nothing waiting. Every order has been handled." : "No orders match that filter."}
+          rows={orders}
+          rowKey={(r) => r.id}
+          columns={[
+            { key: "id", header: "Order", render: (r) => <span className="font-mono text-[12.5px] text-zinc-500">#{r.id}</span> },
+            {
+              key: "distributor",
+              header: "Distributor",
+              strong: true,
+              render: (r) => (
+                <span className="flex flex-col">
+                  <span>{r.distributor?.company_name || "—"}</span>
+                  <span className="text-xs text-zinc-400">{r.distributor?.name}</span>
+                </span>
+              ),
+            },
+            { key: "product", header: "Product", render: (r) => r.products?.name || "—" },
+            { key: "packaging", header: "Packaging", render: (r) => r.packaging?.type || "—" },
+            { key: "quantity", header: "Qty", align: "right", render: (r) => number(r.quantity) },
+            { key: "price", header: "Value", align: "right", render: (r) => currency(r.price) },
+            { key: "deadline", header: "Deadline", render: (r) => shortDate(r.deadline) },
+            {
+              key: "action",
+              header: "",
+              align: "right",
+              render: (r) =>
+                r.status === "Pending" ? (
+                  <span className="flex justify-end gap-2">
+                    <Button size="sm" variant="success" loading={working === r.id} onClick={() => accept(r)}>
+                      <Check className="h-3.5 w-3.5" /> Accept
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => reject(r)}>
+                      <X className="h-3.5 w-3.5" /> Reject
+                    </Button>
+                  </span>
+                ) : (
+                  <Badge>{r.status}</Badge>
+                ),
+            },
+          ]}
+        />
+      </Card>
+    </AppShell>
   );
 }

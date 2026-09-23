@@ -1,293 +1,213 @@
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/router";
+import { useEffect, useState } from "react";
+import { Play, Check, ChevronRight } from "lucide-react";
 import { supabase } from "@/utils/supabaseClient";
-import { Card } from "@/components/ui/card";
+import { useProfile } from "@/lib/useProfile";
+import { useToast } from "@/components/ui/toast";
+import { AppShell } from "@/components/app/shell";
+import { Card, CardHeader, CardBody } from "@/components/ui/card";
+import { Table } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import * as Popover from "@radix-ui/react-popover";
-import { ChevronDown } from "lucide-react";
+import { Select } from "@/components/ui/select";
+import { currency, number, shortDate } from "@/lib/format";
 
-const ReceivedOrdersPage = () => {
-  const router = useRouter();
-  const [managerDetails, setManagerDetails] = useState(null);
-  const [receivedOrders, setReceivedOrders] = useState([]);
-  const [filters, setFilters] = useState({
-    product: "",
-    status: "",
-  });
+const FILTERS = [
+  { value: "Pending", label: "Waiting to start" },
+  { value: "Accepted", label: "In production" },
+  { value: "Delivered", label: "Delivered" },
+  { value: "All", label: "Everything" },
+];
 
-  // Authenticate and load manager details
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session || !session.session) {
-        router.replace("/login");
-        return;
-      }
+export default function ProductionQueue() {
+  const { profile, loading } = useProfile("Production Manager");
+  const toast = useToast();
+  const [orders, setOrders] = useState([]);
+  const [filter, setFilter] = useState("Pending");
+  const [busy, setBusy] = useState(true);
+  const [open, setOpen] = useState(null);
+  const [recipe, setRecipe] = useState([]);
+  const [working, setWorking] = useState(null);
 
-      const userId = session.session.user.id;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, name, email, company_name, company_location, role")
-        .eq("id", userId)
-        .single();
-
-      if (error || !data) {
-        console.error("❌ Unauthorized or no profile found.");
-        router.replace("/login");
-      } else {
-        console.log("✅ Manager Profile:", data);
-        setManagerDetails(data);
-        fetchReceivedOrders(data.id);
-      }
-    };
-
-    checkAuth();
-  }, [router]);
-
-  // Fetch orders for the production manager
-  const fetchReceivedOrders = async (managerId) => {
-    try {
-      console.log("🔄 Fetching factory for manager ID:", managerId);
-
-      const { data: factoryData, error: factoryError } = await supabase
-        .from("production_manager_factory")
-        .select("factory_id")
-        .eq("prod_manager_id", managerId)
-        .single();
-
-      if (factoryError || !factoryData) {
-        console.error("❌ Error fetching factory data:", factoryError);
-        return;
-      }
-
-      const factoryId = factoryData.factory_id;
-      console.log("🏭 Factory ID:", factoryId);
-
-      // STEP 1: Get product_ids linked to this factory from factories table
-      const { data: productMappings, error: mapError } = await supabase
-        .from("factories")
-        .select("product_id")
-        .eq("id", factoryId);
-
-      if (mapError || !productMappings || productMappings.length === 0) {
-        console.warn("⚠️ No products mapped to this factory.");
-        return setReceivedOrders([]);
-      }
-
-      const productIds = productMappings.map((item) => item.product_id);
-      console.log("🔗 Product IDs linked to factory:", productIds);
-
-      // STEP 2: Get only orders for those product_ids
-      const { data: orders, error: ordersError } = await supabase
-        .from("war_orders")
-        .select(`
-          id,
-          product_id,
-          packaging_id,
-          quantity,
-          base_price,
-          total_price,
-          status,
-          deadline,
-          created_at,
-          products(name),
-          packaging(type)
-        `)
-        .in("product_id", productIds)
-        .order("created_at", { ascending: false });
-
-      if (ordersError) {
-        console.error("❌ Error fetching filtered orders:", ordersError);
-      } else {
-        console.log("✅ Filtered Orders:", orders);
-        setReceivedOrders(orders || []);
-      }
-    } catch (err) {
-      console.error("❌ General error fetching orders:", err.message);
-    }
+  const load = async () => {
+    setBusy(true);
+    let query = supabase
+      .from("war_orders")
+      .select("id, product_id, quantity, base_price, total_price, status, deadline, created_at, products(name), packaging(type), warehouse(name)")
+      .order("created_at", { ascending: false });
+    if (filter !== "All") query = query.eq("status", filter);
+    const { data } = await query;
+    setOrders(data || []);
+    setBusy(false);
   };
 
-// Accept order with inventory check
-const handleAccept = async (orderId) => {
-  try {
-    // Step 1: Fetch the Order Details
-    console.log("🔄 Fetching order details for Order ID:", orderId);
-    
-    const { data: orderData, error: orderError } = await supabase
-      .from("war_orders")
-      .select("product_id, packaging_id, quantity")
-      .eq("id", orderId)
-      .single();
+  useEffect(() => {
+    load();
+  }, [filter]);
 
-    if (orderError) {
-      console.error("❌ Error fetching order details:", orderError.message);
-      alert("An error occurred while fetching order details.");
-      return;
-    }
-    console.log("✅ Order Details:", orderData);
+  /* What a run consumes: recipe quantity per unit multiplied by the order,
+     checked against what the factory has on the shelf. */
+  const openRun = async (order) => {
+    setOpen(order);
+    setRecipe([]);
 
-    // Step 2: Fetch the Raw Materials Required for the Product
-    console.log("🔄 Fetching product recipe for Product ID:", orderData.product_id);
-
-    const { data: productRecipes, error: recipesError } = await supabase
+    const { data: lines } = await supabase
       .from("product_recipes")
-      .select("raw_material_id, quantity_per_unit")
-      .eq("product_id", orderData.product_id)
-      .eq("packaging_id", orderData.packaging_id);
+      .select("quantity_per_unit, raw_materials(id, name, unit, base_price)")
+      .eq("product_id", order.product_id);
 
-    if (recipesError) {
-      console.error("❌ Error fetching product recipes:", recipesError.message);
-      alert("An error occurred while fetching product recipes.");
-      return;
-    }
+    const { data: link } = await supabase
+      .from("production_manager_factory")
+      .select("factory_id")
+      .eq("prod_manager_id", profile.id)
+      .maybeSingle();
 
-    console.log("✅ Product Recipes (Raw Materials):", productRecipes);
+    const { data: stock } = await supabase
+      .from("factory_inventory")
+      .select("raw_material_id, quantity")
+      .eq("factory_id", link?.factory_id || 0);
 
-    // Step 3: Trigger the Supabase function to check stock and update order status
-    const { data: orderUpdateData, error: triggerError } = await supabase
-      .from("war_orders")
-      .update({ status: "Pending" }) // Set to 'Pending' to trigger backend function
-      .eq("id", orderId);
+    const onHand = Object.fromEntries((stock || []).map((s) => [s.raw_material_id, Number(s.quantity)]));
 
-    if (triggerError) {
-      console.error("❌ Error triggering Supabase function for order acceptance:", triggerError.message);
-      alert("An error occurred while processing the order.");
-      return;
-    }
-
-    console.log("✅ Order acceptance triggered successfully.");
-    fetchReceivedOrders(managerDetails.id); // Refresh the orders list
-    alert("Order accepted successfully!");
-  } catch (err) {
-    console.error("❌ Exception while accepting order:", err.message);
-    alert("An error occurred while processing the order.");
-  }
-};
-
-
-  // Apply Filters
-  const filteredOrders = receivedOrders.filter((order) => {
-    return (
-      (!filters.product ||
-        order.products?.name.toLowerCase().includes(filters.product.toLowerCase())) &&
-      (!filters.status ||
-        order.status.toLowerCase().includes(filters.status.toLowerCase()))
+    setRecipe(
+      (lines || []).map((line) => {
+        const needed = Number(line.quantity_per_unit) * Number(order.quantity);
+        const have = onHand[line.raw_materials?.id] ?? 0;
+        return {
+          id: line.raw_materials?.id,
+          name: line.raw_materials?.name,
+          unit: line.raw_materials?.unit,
+          perUnit: Number(line.quantity_per_unit),
+          needed,
+          have,
+          short: Math.max(0, needed - have),
+          cost: needed * Number(line.raw_materials?.base_price || 0),
+        };
+      })
     );
-  });
+  };
+
+  const start = async (order) => {
+    setWorking(order.id);
+    const { error } = await supabase.from("war_orders").update({ status: "Accepted" }).eq("id", order.id);
+    setWorking(null);
+    if (error) {
+      toast(error.message, "error");
+      return;
+    }
+    toast(`Run #${order.id} started for ${number(order.quantity)} units.`);
+    setOpen(null);
+    load();
+  };
+
+  const complete = async (order) => {
+    setWorking(order.id);
+    const { error } = await supabase.from("war_orders").update({ status: "Delivered" }).eq("id", order.id);
+    setWorking(null);
+    if (error) {
+      toast(error.message, "error");
+      return;
+    }
+    toast(`Run #${order.id} marked delivered.`);
+    load();
+  };
+
+  if (loading) return null;
 
   return (
-    <div className="min-h-screen bg-black text-white flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 p-6 flex flex-col justify-between">
-        {managerDetails && (
-          <Card className="bg-gray-800 p-4 mb-8 text-center">
-            <h2 className="text-xl font-bold text-white">{managerDetails.name}</h2>
-            <p className="text-gray-400 text-sm">{managerDetails.role}</p>
-            <p className="text-gray-400 text-sm">{managerDetails.email}</p>
-            <p className="text-gray-400 text-sm">{managerDetails.company_name}</p>
-            <p className="text-gray-400 text-sm">{managerDetails.company_location}</p>
-          </Card>
-        )}
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-6 relative">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Received Orders</h1>
-        </div>
-
-        {/* Filter Button with Popover */}
-        <Popover.Root>
-          <Popover.Trigger asChild>
-            <Button className="bg-gray-800 text-white hover:bg-gray-700 mb-4 flex items-center">
-              Filter By
-              <ChevronDown className="ml-2 w-4 h-4" />
-            </Button>
-          </Popover.Trigger>
-          <Popover.Content className="p-6 bg-gray-900 rounded-lg shadow-lg z-50 w-80">
-            <h3 className="text-lg font-bold mb-4">Filter Orders</h3>
-            <div className="space-y-4">
-              <Input
-                type="text"
-                placeholder="Product Name"
-                value={filters.product}
-                onChange={(e) => setFilters({ ...filters, product: e.target.value })}
-                className="bg-gray-800 text-white"
-              />
-              <Input
-                type="text"
-                placeholder="Order Status"
-                value={filters.status}
-                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                className="bg-gray-800 text-white"
-              />
-            </div>
-          </Popover.Content>
-        </Popover.Root>
-
-        {/* Orders Table */}
-        <Card className="p-6 bg-gray-800 mt-4">
-          <h2 className="text-xl font-bold mb-4">Received Orders</h2>
-          <div className="overflow-auto max-h-80 border border-gray-700">
-            <table className="min-w-full border-collapse bg-gray-800 text-center border border-gray-700">
-              <thead>
-                <tr>
-                  <th className="border p-4">Product Name</th>
-                  <th className="border p-4">Packaging</th>
-                  <th className="border p-4">Quantity</th>
-                  <th className="border p-4">Status</th>
-                  <th className="border p-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="text-center p-4">
-                      No orders found.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-700">
-                      <td className="p-4 border">{order.products?.name || "—"}</td>
-                      <td className="p-4 border">{order.packaging?.type || "—"}</td>
-                      <td className="p-4 border">{order.quantity}</td>
-                      <td className="p-4 border capitalize">{order.status}</td>
-                      <td className="p-4 border space-x-2">
-                        {order.status.toLowerCase() === "pending" ? (
-                          <>
-                            <Button
-                              className="bg-green-600 hover:bg-green-700"
-                              onClick={() => handleAccept(order.id)}
-                              disabled={order.status !== "Pending"}
-                            >
-                              Accept
-                            </Button>
-                            <Button
-                              className="bg-red-600 hover:bg-red-700"
-                              onClick={() => handleReject(order.id)}
-                              disabled={order.status !== "Pending"}
-                            >
-                              Reject
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-sm text-gray-400 capitalize">
-                            {order.status}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+    <AppShell
+      role="Production Manager"
+      profile={profile}
+      title="Production queue"
+      description="Open a request to see the raw materials the run will consume"
+      actions={<Select className="w-48" value={filter} onChange={setFilter} options={FILTERS} />}
+    >
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <Card>
+          <CardHeader title="Requests" description={`${number(orders.length)} shown`} />
+          <Table
+            loading={busy}
+            empty="Nothing in this part of the queue."
+            rows={orders}
+            rowKey={(r) => r.id}
+            columns={[
+              {
+                key: "product",
+                header: "Run",
+                strong: true,
+                render: (r) => (
+                  <span className="flex flex-col">
+                    <span>{r.products?.name || "—"}</span>
+                    <span className="text-xs font-normal text-zinc-400">#{r.id} · for {r.warehouse?.name || "—"}</span>
+                  </span>
+                ),
+              },
+              { key: "quantity", header: "Qty", align: "right", render: (r) => number(r.quantity) },
+              { key: "deadline", header: "Needed by", render: (r) => shortDate(r.deadline) },
+              { key: "status", header: "Status", render: (r) => <Badge>{r.status}</Badge> },
+              {
+                key: "action",
+                header: "",
+                align: "right",
+                render: (r) => (
+                  <Button size="sm" variant="secondary" onClick={() => openRun(r)}>
+                    Materials <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                ),
+              },
+            ]}
+          />
         </Card>
-      </main>
-    </div>
-  );
-};
 
-export default ReceivedOrdersPage;
+        <Card className="h-fit">
+          <CardHeader
+            title={open ? `Run #${open.id}` : "Material plan"}
+            description={open ? `${number(open.quantity)} × ${open.products?.name}` : "Pick a request to work it out"}
+          />
+          <CardBody>
+            {!open && <p className="py-6 text-center text-[13px] text-zinc-500">Nothing selected yet.</p>}
+
+            {open && (
+              <>
+                <ul className="space-y-3">
+                  {recipe.map((line) => (
+                    <li key={line.id} className="border-b border-zinc-100 pb-3 last:border-0 last:pb-0">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-sm font-medium text-zinc-900">{line.name}</span>
+                        <span className="text-sm tabular text-zinc-900">
+                          {number(Math.round(line.needed))} {line.unit}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-3 text-xs text-zinc-500">
+                        <span>{line.perUnit} {line.unit} per unit · {currency(line.cost)}</span>
+                        {line.short > 0 ? (
+                          <Badge tone="low">short {number(Math.round(line.short))}</Badge>
+                        ) : (
+                          <Badge tone="ok">in stock</Badge>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                  {recipe.length === 0 && <li className="text-[13px] text-zinc-500">No recipe recorded for this product.</li>}
+                </ul>
+
+                <div className="mt-5 flex gap-2">
+                  {open.status === "Pending" && (
+                    <Button className="flex-1" loading={working === open.id} onClick={() => start(open)}>
+                      <Play className="h-4 w-4" /> Start run
+                    </Button>
+                  )}
+                  {open.status === "Accepted" && (
+                    <Button className="flex-1" variant="success" loading={working === open.id} onClick={() => complete(open)}>
+                      <Check className="h-4 w-4" /> Mark delivered
+                    </Button>
+                  )}
+                  <Button variant="secondary" onClick={() => setOpen(null)}>Close</Button>
+                </div>
+              </>
+            )}
+          </CardBody>
+        </Card>
+      </div>
+    </AppShell>
+  );
+}

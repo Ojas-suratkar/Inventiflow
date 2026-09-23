@@ -1,103 +1,66 @@
-"use client";
-
-import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowRight, Boxes, Factory, Truck, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Truck } from "lucide-react"; // Truck icon from Lucide for logistics theme
+
+const roles = [
+  { icon: Truck, title: "Distributors", copy: "Order stock from the warehouse that covers your postcode and track every order to delivery." },
+  { icon: Warehouse, title: "Warehouses", copy: "Accept or reject incoming orders against live stock, and restock from the factories." },
+  { icon: Factory, title: "Production", copy: "See the queue, and the raw materials each run consumes, worked out from the recipe." },
+  { icon: Boxes, title: "Vendors", copy: "Fill raw material requests from the factories, with prices and deadlines in one list." },
+];
 
 export default function Home() {
-  const router = useRouter();
-
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex flex-col justify-center items-center text-white overflow-hidden">
-      
-      {/* Background Blur Effects */}
-      <div className="absolute inset-0 flex justify-center items-center">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }} 
-          animate={{ opacity: 1, scale: 1 }} 
-          transition={{ duration: 1.5, ease: "easeOut" }}
-          className="w-[450px] h-[450px] md:w-[600px] md:h-[600px] bg-indigo-500 opacity-25 rounded-full filter blur-[140px]"
-        />
-      </div>
+    <div className="min-h-screen bg-white">
+      <header className="border-b border-zinc-200">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-white">
+              <Boxes className="h-4 w-4" />
+            </span>
+            <span className="text-[15px] font-semibold tracking-tight">InventiFlow</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/login"><Button variant="ghost" size="sm">Sign in</Button></Link>
+            <Link href="/signup"><Button size="sm">Create account</Button></Link>
+          </div>
+        </div>
+      </header>
 
-      {/* Moving Truck Animation */}
-      <motion.div
-        initial={{ x: "-100vw" }}
-        animate={{ x: "100vw" }}
-        transition={{ repeat: Infinity, duration: 15, ease: "linear" }}
-        className="absolute bottom-10 w-20 h-20 md:w-32 md:h-32 text-indigo-400"
-      >
-        <Truck size={80} className="text-indigo-400 opacity-80" />
-      </motion.div>
+      <section className="mx-auto max-w-5xl px-6 py-20 sm:py-28">
+        <p className="text-[13px] font-medium uppercase tracking-wider text-brand-600">Supply chain operations</p>
+        <h1 className="mt-3 max-w-2xl text-4xl font-semibold leading-[1.1] tracking-tight text-zinc-900 sm:text-5xl">
+          One order trail from the shelf back to the raw material.
+        </h1>
+        <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-zinc-600">
+          InventiFlow connects distributors, warehouses, factories and vendors in a single system. An order placed
+          downstream moves stock, triggers a restock, and works out the raw materials the run will need.
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Link href="/login"><Button size="lg">Sign in <ArrowRight className="h-4 w-4" /></Button></Link>
+          <Link href="/signup"><Button size="lg" variant="secondary">Create an account</Button></Link>
+        </div>
+      </section>
 
-      {/* Main Content */}
-      <motion.div 
-        initial={{ y: 50, opacity: 0 }} 
-        animate={{ y: 0, opacity: 1 }} 
-        transition={{ duration: 1.5, ease: "easeOut" }}
-        className="relative z-10 flex flex-col items-center text-center"
-      >
-        {/* Logo / Truck Symbol Above Title */}
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 1.5, delay: 0.2 }}
-          className="text-white drop-shadow-[3_7px_18px_rgba(215,215,215,0.3)"
-        >
-          <Truck size={100} className="text-white drop-shadow-[3_7px_18px_rgba(215,215,215,0.3)" />
-        </motion.div>
+      <section className="border-t border-zinc-200 bg-zinc-50">
+        <div className="mx-auto grid max-w-5xl gap-px overflow-hidden px-6 py-16 sm:grid-cols-2">
+          {roles.map(({ icon: Icon, title, copy }) => (
+            <div key={title} className="p-6">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-brand-600">
+                <Icon className="h-4.5 w-4.5" />
+              </span>
+              <h3 className="mt-4 text-[15px] font-semibold text-zinc-900">{title}</h3>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-600">{copy}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-        {/* App Name */}
-        <motion.h1
-          initial={{ scale: 0.8, opacity: 0 }} 
-          animate={{ scale: 1, opacity: 1 }} 
-          transition={{ duration: 1.5, delay: 0.2 }}
-          className="text-7xl md:text-8xl font-extrabold text-white drop-shadow-[3_7px_18px_rgba(215,215,215,0.3)]"
-          >
-          InventiFlow
-        </motion.h1>
-
-        {/* Tagline */}
-        <motion.p
-          initial={{ opacity: 0 }} 
-          animate={{ opacity: 1 }} 
-          transition={{ duration: 1.7, delay: 0.4 }}
-          className="mt-4 text-lg md:text-xl text-gray-300 max-w-2xl"
-        >
-          Revolutionizing Supply Chain & Inventory Management with AI-powered insights. 
-          Seamless, real-time, and intuitive.
-        </motion.p>
-
-        {/* Get Started Button */}
-        <motion.div
-          initial={{ y: 30, opacity: 0 }} 
-          animate={{ y: 0, opacity: 1 }} 
-          transition={{ duration: 1.7, delay: 0.6 }}
-          className="mt-8"
-        >
-          <Button
-            onClick={() => router.push("/signup")}
-            className="px-10 py-4 text-lg font-semibold bg-indigo-600 hover:bg-indigo-700 transition-all duration-300 rounded-xl shadow-lg shadow-indigo-500/40 transform hover:scale-105 hover:shadow-indigo-400 border:1px border fill-white"
-          >
-            Get Started
-          </Button>
-        </motion.div>
-      </motion.div>
-
-      {/* Floating Animated Shapes */}
-      <motion.div 
-        initial={{ y: -20 }} 
-        animate={{ y: 20 }} 
-        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut", repeatType: "mirror" }}
-        className="absolute bottom-10 left-20 w-32 h-32 md:w-40 md:h-40 bg-purple-400 opacity-25 rounded-full filter blur-[80px]"
-      />
-      <motion.div 
-        initial={{ y: 20 }} 
-        animate={{ y: -20 }} 
-        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut", repeatType: "mirror" }}
-        className="absolute top-16 right-16 w-40 h-40 md:w-52 md:h-52 bg-indigo-500 opacity-30 rounded-full filter blur-[90px]"
-      />
+      <footer className="border-t border-zinc-200">
+        <div className="mx-auto max-w-5xl px-6 py-6 text-[13px] text-zinc-500">
+          InventiFlow · Next.js and Supabase
+        </div>
+      </footer>
     </div>
   );
 }

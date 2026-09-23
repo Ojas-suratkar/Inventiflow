@@ -1,49 +1,37 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: [
-    "./pages/**/*.{js,ts,jsx,tsx}",
-    "./components/**/*.{js,ts,jsx,tsx}",
-    "./styles/**/*.{css}"
-  ],
+  content: ["./pages/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
-        primary: "#2563EB", // ✅ Add a primary color (Blue as an example)
-        "primary-foreground": "#ffffff", // ✅ Add foreground color
+        brand: {
+          50: "#eff5ff",
+          100: "#dbe8fe",
+          200: "#bfd7fe",
+          300: "#93bbfd",
+          400: "#6096fa",
+          500: "#3b74f6",
+          600: "#2556eb",
+          700: "#1d43d8",
+          800: "#1e39af",
+          900: "#1e358a",
+        },
       },
-      animation: {
-        'pulse-slow': 'pulse 6s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'gradient-x': 'gradient-x 10s ease infinite',
-        'float': 'float 6s ease-in-out infinite',
-        'glow': 'glow 2s ease-in-out infinite alternate',
+      fontFamily: {
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+      },
+      boxShadow: {
+        card: "0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06)",
+        pop: "0 8px 24px rgba(16, 24, 40, 0.10), 0 2px 6px rgba(16, 24, 40, 0.06)",
       },
       keyframes: {
-        'gradient-x': {
-          '0%, 100%': {
-            'background-size': '200% 200%',
-            'background-position': 'left center'
-          },
-          '50%': {
-            'background-size': '200% 200%',
-            'background-position': 'right center'
-          },
-        },
-        'float': {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-10px)' },
-        },
-        'glow': {
-          '0%': { boxShadow: '0 0 5px rgba(99, 102, 241, 0.4)' },
-          '100%': { boxShadow: '0 0 20px rgba(99, 102, 241, 0.8), 0 0 30px rgba(99, 102, 241, 0.6)' },
-        },
+        "fade-up": { from: { opacity: 0, transform: "translateY(6px)" }, to: { opacity: 1, transform: "none" } },
+        shimmer: { "100%": { transform: "translateX(100%)" } },
       },
-      transitionDelay: {
-        '2000': '2000ms',
-        '4000': '4000ms',
-      },
-      blur: {
-        '4xl': '72px',
-        '5xl': '96px',
+      animation: {
+        "fade-up": "fade-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both",
+        shimmer: "shimmer 1.6s infinite",
       },
     },
   },
