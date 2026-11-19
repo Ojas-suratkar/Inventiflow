@@ -4,7 +4,15 @@ A supply chain operations app: distributors order from warehouses, warehouses
 restock from factories, factories work out the raw materials each run needs, and
 vendors fill them. One order trail, four dashboards, one database.
 
-![The distributor dashboard](docs/demo-poster.jpg)
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/landing.jpg" alt="Landing page" /><br/><b>Landing page</b></td>
+    <td align="center" width="50%"><img src="docs/analytics.jpg" alt="Analytics dashboard" /><br/><b>Analytics dashboard</b></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="docs/demo-poster.jpg" alt="Distributor dashboard" width="70%" /><br/><b>Distributor dashboard</b></td>
+  </tr>
+</table>
 
 ## The flow
 
