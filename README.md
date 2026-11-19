@@ -4,7 +4,9 @@ A supply chain operations app: distributors order from warehouses, warehouses
 restock from factories, factories work out the raw materials each run needs, and
 vendors fill them. One order trail, four dashboards, one database.
 
-![The distributor dashboard](docs/demo-poster.jpg)
+[![InventiFlow product tour](docs/inventiflow-demo.jpg)](docs/inventiflow-demo.mp4)
+
+**Watch the 80-second product tour:** every role end to end, from the distributor's order to the vendor's delivery. Demo data is fictional. ([download the mp4](docs/inventiflow-demo.mp4))
 
 ## The flow
 
